@@ -9,8 +9,6 @@
 #else
 #define ANALOGSDK_EXPORT __declspec(dllimport)
 #endif
-#pragma comment(lib, "userenv.lib")
-#pragma comment(lib, "WS2_32")
 #else
 #define ANALOGSDK_EXPORT
 #endif
@@ -21,7 +19,7 @@
 #define ANALOGSDK_API ANALOGSDK_EXPORT
 #endif
 
-const uint32_t ANALOG_SDK_PLUGIN_ABI_VERSION = 1;
+ANALOGSDK_API const uint32_t ANALOG_SDK_PLUGIN_ABI_VERSION = 1;
 
 typedef void (*device_event)(void const *, WootingAnalog_DeviceEventType,
                              const WootingAnalog_DeviceInfo_FFI *);
