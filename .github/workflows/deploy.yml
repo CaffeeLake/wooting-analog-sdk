@@ -16,8 +16,8 @@ jobs:
             target: aarch64-apple-darwin
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          # - os: windows-2019
-          #   target: x86_64-pc-windows-msvc
+          - os: win-signing
+            target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
 
@@ -25,7 +25,7 @@ jobs:
       TARGET: ${{ matrix.target }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Setup Build Environment
@@ -34,32 +34,47 @@ jobs:
           sudo apt update
           sudo apt install libudev-dev libhidapi-dev
       - name: Setup rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          override: true
-          default: true
-          target: ${{ matrix.target }}
+          toolchain: nightly-2023-11-10
+          targets: ${{ matrix.target }}
       - uses: davidB/rust-cargo-make@v1
-      - uses: Swatinem/rust-cache@v1
+        # This doesn't work on custom win runner, so we just skip it as it's installed already anyway
+        if: ${{ ! startsWith(matrix.os, 'win-sign') }}
         with:
-          sharedKey: ${{ matrix.target }}
+          version: 0.37.23
+      - uses: Swatinem/rust-cache@v2
+        # Caching not needed on custom runner
+        if: ${{ ! startsWith(matrix.os, 'win-sign') }}
+        with:
+          shared-key: ${{ matrix.target }}
       - name: Run deploy script
         shell: bash
+        # Signing key env is required for signing dll's on windows
+        env:
+          TIMESTAMP: ${{secrets.WIN_EV_CSC_TIMESTAMP}}
+          CERT_FILE: ${{secrets.WIN_EV_CSC_CERT_FILE}}
+          CRYPT_PROVIDER: ${{secrets.WIN_EV_CSC_CRYPT_PROVIDER}}
+          READER: ${{secrets.WIN_EV_CSC_READER}}
+          PASS: ${{secrets.WIN_EV_CSC_PASS}}
+          CONTAINER: ${{secrets.WIN_EV_CSC_CONTAINER}}
         run: sh ci/before_deploy.sh
       - name: Build Windows Installer
         shell: bash
-        env:
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-          WIN_CSC_DESC: ${{ secrets.WIN_CSC_DESC }}
-          WIN_CSC_SUBJECTNAME: ${{ secrets.WIN_CSC_SUBJECTNAME }}
         if: runner.os == 'Windows'
+        env:
+          TIMESTAMP: ${{secrets.WIN_EV_CSC_TIMESTAMP}}
+          CERT_FILE: ${{secrets.WIN_EV_CSC_CERT_FILE}}
+          CRYPT_PROVIDER: ${{secrets.WIN_EV_CSC_CRYPT_PROVIDER}}
+          READER: ${{secrets.WIN_EV_CSC_READER}}
+          PASS: ${{secrets.WIN_EV_CSC_PASS}}
+          CONTAINER: ${{secrets.WIN_EV_CSC_CONTAINER}}
         run: cargo make --cwd wooting-analog-sdk sign-win-installer -- --target $TARGET
       - name: Build debian package
         if: startsWith(matrix.os, 'ubuntu')
         run: cargo make --cwd wooting-analog-sdk build-deb  -- --target $TARGET
       - name: Upload artifacts to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           draft: true
           files: |
